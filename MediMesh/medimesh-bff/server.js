@@ -28,9 +28,12 @@ async function forwardRequest(serviceUrl, path, method, headers, data) {
   const config = {
     method,
     url: `${serviceUrl}${path}`,
-    headers: { Authorization: headers.authorization || '' },
-    data
+    headers: {
+      Authorization: headers.authorization || '',
+      'Content-Type': 'application/json'
+    }
   };
+  if (data !== undefined) config.data = data;
   const response = await axios(config);
   return response.data;
 }
