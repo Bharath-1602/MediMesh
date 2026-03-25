@@ -1,0 +1,50 @@
+# MongoDB StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: medimesh-mongodb
+  namespace: medimesh
+spec:
+  serviceName: medimesh-mongodb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medimesh-mongodb
+  template:
+    metadata:
+      labels:
+        app: medimesh-mongodb
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:7
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: mongodb-data
+              mountPath: /data/db
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: mongodb-data
+          persistentVolumeClaim:
+            claimName: medimesh-mongodb-pvc
+---
+# MongoDB Headless Service (for StatefulSet)
+apiVersion: v1
+kind: Service
+metadata:
+  name: medimesh-mongodb
+  namespace: medimesh
+spec:
+  clusterIP: None
+  selector:
+    app: medimesh-mongodb
+  ports:
+    - port: 27017
+      targetPort: 27017

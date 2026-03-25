@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medimesh-config
+  namespace: medimesh
+data:
+  # MongoDB
+  MONGO_HOST: "medimesh-mongodb"
+  MONGO_PORT: "27017"
+
+  # Service URLs (internal ClusterIP DNS)
+  AUTH_SERVICE_URL: "http://medimesh-auth-svc:5001"
+  USER_SERVICE_URL: "http://medimesh-user-svc:5002"
+  DOCTOR_SERVICE_URL: "http://medimesh-doctor-svc:5003"
+  APPOINTMENT_SERVICE_URL: "http://medimesh-appointment-svc:5004"
+  VITALS_SERVICE_URL: "http://medimesh-vitals-svc:5005"
+  PHARMACY_SERVICE_URL: "http://medimesh-pharmacy-svc:5006"
+  AMBULANCE_SERVICE_URL: "http://medimesh-ambulance-svc:5007"
+  COMPLAINT_SERVICE_URL: "http://medimesh-complaint-svc:5008"
+  FORUM_SERVICE_URL: "http://medimesh-forum-svc:5009"

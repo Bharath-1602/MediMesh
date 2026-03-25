@@ -1,0 +1,578 @@
+# ════════════════════════════════════════════════════════
+# MediMesh — All Backend Service Deployments + ClusterIP
+# ════════════════════════════════════════════════════════
+
+# ─── Auth Service ────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medimesh-auth
+  namespace: medimesh
+  labels:
+    app: medimesh-auth
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medimesh-auth
+  template:
+    metadata:
+      labels:
+        app: medimesh-auth
+    spec:
+      containers:
+        - name: medimesh-auth
+          image: medimesh-auth:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5001
+          env:
+            - name: PORT
+              value: "5001"
+            - name: MONGO_URI
+              value: "mongodb://medimesh-mongodb:27017/medimesh-auth-db"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medimesh-secrets
+                  key: JWT_SECRET
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medimesh-auth-svc
+  namespace: medimesh
+spec:
+  type: ClusterIP
+  selector:
+    app: medimesh-auth
+  ports:
+    - port: 5001
+      targetPort: 5001
+
+---
+# ─── User Service ────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medimesh-user
+  namespace: medimesh
+  labels:
+    app: medimesh-user
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medimesh-user
+  template:
+    metadata:
+      labels:
+        app: medimesh-user
+    spec:
+      containers:
+        - name: medimesh-user
+          image: medimesh-user:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5002
+          env:
+            - name: PORT
+              value: "5002"
+            - name: MONGO_URI
+              value: "mongodb://medimesh-mongodb:27017/medimesh-user-db"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medimesh-secrets
+                  key: JWT_SECRET
+            - name: DOCTOR_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: medimesh-config
+                  key: DOCTOR_SERVICE_URL
+            - name: AMBULANCE_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: medimesh-config
+                  key: AMBULANCE_SERVICE_URL
+            - name: PHARMACY_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: medimesh-config
+                  key: PHARMACY_SERVICE_URL
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medimesh-user-svc
+  namespace: medimesh
+spec:
+  type: ClusterIP
+  selector:
+    app: medimesh-user
+  ports:
+    - port: 5002
+      targetPort: 5002
+
+---
+# ─── Doctor Service ──────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medimesh-doctor
+  namespace: medimesh
+  labels:
+    app: medimesh-doctor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medimesh-doctor
+  template:
+    metadata:
+      labels:
+        app: medimesh-doctor
+    spec:
+      containers:
+        - name: medimesh-doctor
+          image: medimesh-doctor:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5003
+          env:
+            - name: PORT
+              value: "5003"
+            - name: MONGO_URI
+              value: "mongodb://medimesh-mongodb:27017/medimesh-doctor-db"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medimesh-secrets
+                  key: JWT_SECRET
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medimesh-doctor-svc
+  namespace: medimesh
+spec:
+  type: ClusterIP
+  selector:
+    app: medimesh-doctor
+  ports:
+    - port: 5003
+      targetPort: 5003
+
+---
+# ─── Appointment Service ────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medimesh-appointment
+  namespace: medimesh
+  labels:
+    app: medimesh-appointment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medimesh-appointment
+  template:
+    metadata:
+      labels:
+        app: medimesh-appointment
+    spec:
+      containers:
+        - name: medimesh-appointment
+          image: medimesh-appointment:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5004
+          env:
+            - name: PORT
+              value: "5004"
+            - name: MONGO_URI
+              value: "mongodb://medimesh-mongodb:27017/medimesh-appointment-db"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medimesh-secrets
+                  key: JWT_SECRET
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medimesh-appointment-svc
+  namespace: medimesh
+spec:
+  type: ClusterIP
+  selector:
+    app: medimesh-appointment
+  ports:
+    - port: 5004
+      targetPort: 5004
+
+---
+# ─── Vitals Service ─────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medimesh-vitals
+  namespace: medimesh
+  labels:
+    app: medimesh-vitals
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medimesh-vitals
+  template:
+    metadata:
+      labels:
+        app: medimesh-vitals
+    spec:
+      containers:
+        - name: medimesh-vitals
+          image: medimesh-vitals:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5005
+          env:
+            - name: PORT
+              value: "5005"
+            - name: MONGO_URI
+              value: "mongodb://medimesh-mongodb:27017/medimesh-vitals-db"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medimesh-secrets
+                  key: JWT_SECRET
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medimesh-vitals-svc
+  namespace: medimesh
+spec:
+  type: ClusterIP
+  selector:
+    app: medimesh-vitals
+  ports:
+    - port: 5005
+      targetPort: 5005
+
+---
+# ─── Pharmacy Service ───────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medimesh-pharmacy
+  namespace: medimesh
+  labels:
+    app: medimesh-pharmacy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medimesh-pharmacy
+  template:
+    metadata:
+      labels:
+        app: medimesh-pharmacy
+    spec:
+      containers:
+        - name: medimesh-pharmacy
+          image: medimesh-pharmacy:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5006
+          env:
+            - name: PORT
+              value: "5006"
+            - name: MONGO_URI
+              value: "mongodb://medimesh-mongodb:27017/medimesh-pharmacy-db"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medimesh-secrets
+                  key: JWT_SECRET
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medimesh-pharmacy-svc
+  namespace: medimesh
+spec:
+  type: ClusterIP
+  selector:
+    app: medimesh-pharmacy
+  ports:
+    - port: 5006
+      targetPort: 5006
+
+---
+# ─── Ambulance Service ──────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medimesh-ambulance
+  namespace: medimesh
+  labels:
+    app: medimesh-ambulance
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medimesh-ambulance
+  template:
+    metadata:
+      labels:
+        app: medimesh-ambulance
+    spec:
+      containers:
+        - name: medimesh-ambulance
+          image: medimesh-ambulance:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5007
+          env:
+            - name: PORT
+              value: "5007"
+            - name: MONGO_URI
+              value: "mongodb://medimesh-mongodb:27017/medimesh-ambulance-db"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medimesh-secrets
+                  key: JWT_SECRET
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medimesh-ambulance-svc
+  namespace: medimesh
+spec:
+  type: ClusterIP
+  selector:
+    app: medimesh-ambulance
+  ports:
+    - port: 5007
+      targetPort: 5007
+
+---
+# ─── Complaint Service ──────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medimesh-complaint
+  namespace: medimesh
+  labels:
+    app: medimesh-complaint
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medimesh-complaint
+  template:
+    metadata:
+      labels:
+        app: medimesh-complaint
+    spec:
+      containers:
+        - name: medimesh-complaint
+          image: medimesh-complaint:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5008
+          env:
+            - name: PORT
+              value: "5008"
+            - name: MONGO_URI
+              value: "mongodb://medimesh-mongodb:27017/medimesh-complaint-db"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medimesh-secrets
+                  key: JWT_SECRET
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medimesh-complaint-svc
+  namespace: medimesh
+spec:
+  type: ClusterIP
+  selector:
+    app: medimesh-complaint
+  ports:
+    - port: 5008
+      targetPort: 5008
+
+---
+# ─── Forum Service ──────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medimesh-forum
+  namespace: medimesh
+  labels:
+    app: medimesh-forum
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medimesh-forum
+  template:
+    metadata:
+      labels:
+        app: medimesh-forum
+    spec:
+      containers:
+        - name: medimesh-forum
+          image: medimesh-forum:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5009
+          env:
+            - name: PORT
+              value: "5009"
+            - name: MONGO_URI
+              value: "mongodb://medimesh-mongodb:27017/medimesh-forum-db"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medimesh-secrets
+                  key: JWT_SECRET
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medimesh-forum-svc
+  namespace: medimesh
+spec:
+  type: ClusterIP
+  selector:
+    app: medimesh-forum
+  ports:
+    - port: 5009
+      targetPort: 5009
+
+---
+# ─── BFF Service ────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medimesh-bff
+  namespace: medimesh
+  labels:
+    app: medimesh-bff
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medimesh-bff
+  template:
+    metadata:
+      labels:
+        app: medimesh-bff
+    spec:
+      containers:
+        - name: medimesh-bff
+          image: medimesh-bff:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5010
+          env:
+            - name: PORT
+              value: "5010"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medimesh-secrets
+                  key: JWT_SECRET
+          envFrom:
+            - configMapRef:
+                name: medimesh-config
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medimesh-bff-svc
+  namespace: medimesh
+spec:
+  type: ClusterIP
+  selector:
+    app: medimesh-bff
+  ports:
+    - port: 5010
+      targetPort: 5010

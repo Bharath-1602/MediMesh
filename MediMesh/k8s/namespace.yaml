@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: medimesh
+  labels:
+    app: medimesh
+    project: hospital-management
