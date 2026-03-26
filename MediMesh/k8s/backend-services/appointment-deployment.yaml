@@ -1,0 +1,57 @@
+# ════════════════════════════════════════════════════════════
+# MediMesh — Appointment Service Deployment
+# ════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medimesh-appointment
+  namespace: medimesh
+  labels:
+    app: medimesh-appointment
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: medimesh-appointment
+      tier: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: medimesh-appointment
+        tier: backend
+    spec:
+      containers:
+        - name: medimesh-appointment
+          image: bharath44623/medimesh_medimesh-appointment:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5004
+              name: http
+          env:
+            - name: PORT
+              value: "5004"
+            - name: MONGO_URI
+              value: "mongodb://medimesh-mongodb:27017/medimesh-appointment-db"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medimesh-secrets
+                  key: JWT_SECRET
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: medimesh-config
+                  key: NODE_ENV
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

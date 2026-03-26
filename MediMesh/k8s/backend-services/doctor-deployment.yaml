@@ -1,0 +1,57 @@
+# ════════════════════════════════════════════════════════════
+# MediMesh — Doctor Service Deployment
+# ════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medimesh-doctor
+  namespace: medimesh
+  labels:
+    app: medimesh-doctor
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: medimesh-doctor
+      tier: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: medimesh-doctor
+        tier: backend
+    spec:
+      containers:
+        - name: medimesh-doctor
+          image: bharath44623/medimesh_medimesh-doctor:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5003
+              name: http
+          env:
+            - name: PORT
+              value: "5003"
+            - name: MONGO_URI
+              value: "mongodb://medimesh-mongodb:27017/medimesh-doctor-db"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medimesh-secrets
+                  key: JWT_SECRET
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: medimesh-config
+                  key: NODE_ENV
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
