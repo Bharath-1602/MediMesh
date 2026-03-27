@@ -1,0 +1,78 @@
+# ════════════════════════════════════════════════════════════
+# MediMesh — MongoDB StatefulSet + Headless Service
+# ════════════════════════════════════════════════════════════
+
+# ─── StatefulSet ──────────────────────────────────────────
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: medimesh-mongodb
+  namespace: medimesh
+  labels:
+    app: medimesh-mongodb
+    tier: database
+spec:
+  serviceName: medimesh-mongodb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medimesh-mongodb
+      tier: database
+  template:
+    metadata:
+      labels:
+        app: medimesh-mongodb
+        tier: database
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:7
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 27017
+              name: mongo
+          # No auth env vars — services connect without credentials
+          readinessProbe:
+            tcpSocket:
+              port: 27017
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 27017
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          volumeMounts:
+            - name: mongodb-data
+              mountPath: /data/db
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: mongodb-data
+          persistentVolumeClaim:
+            claimName: medimesh-mongodb-pvc
+
+---
+# ─── Headless Service (for StatefulSet DNS) ───────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: medimesh-mongodb
+  namespace: medimesh
+  labels:
+    app: medimesh-mongodb
+    tier: database
+spec:
+  clusterIP: None
+  selector:
+    app: medimesh-mongodb
+    tier: database
+  ports:
+    - port: 27017
+      targetPort: 27017
+      name: mongo
