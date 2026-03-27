@@ -390,6 +390,80 @@ kubectl rollout history deployment/medimesh-auth -n medimesh
 
 ---
 
+## 🛠️ Fixes Applied — CrashLoopBackOff Resolution
+
+### Problem
+
+After initial deployment, **one replica of each backend service kept crashing** with `CrashLoopBackOff` / `Error` states, while the other replica ran fine. Pods cycled through restarts endlessly.
+
+### Root Causes Identified
+
+#### 1. MongoDB Authentication Mismatch (Primary Cause)
+
+The MongoDB StatefulSet was configured with `MONGO_INITDB_ROOT_USERNAME` and `MONGO_INITDB_ROOT_PASSWORD`, enabling authentication. However, all 9 service deployments connected to MongoDB **without credentials** in their `MONGO_URI`:
+
+```
+# ❌ Old (no auth in URI, but MongoDB required auth):
+mongodb://medimesh-mongodb:27017/medimesh-ambulance-db
+```
+
+This caused `AuthenticationFailed` errors. The services' `server.js` files called `process.exit(1)` on the first connection failure, instantly killing the container.
+
+#### 2. No Startup Ordering (Secondary Cause)
+
+All backend service pods started **simultaneously** with MongoDB. When MongoDB wasn't ready yet, services would fail to connect and immediately exit, causing Kubernetes to restart them repeatedly.
+
+### Changes Made
+
+#### A. MongoDB StatefulSet (`k8s/mongodb/mongodb-statefulset.yaml`)
+
+- **Removed** `MONGO_INITDB_ROOT_USERNAME` and `MONGO_INITDB_ROOT_PASSWORD` environment variables
+- MongoDB now runs **without authentication**, matching the credential-less `MONGO_URI` strings in all services
+- **Added** TCP readiness and liveness probes on port 27017
+
+#### B. All Backend Deployments (`k8s/backend-services/*.yaml`)
+
+- **Added `initContainers`** with a `busybox` container that uses `nc -z` to poll MongoDB port 27017
+  - This ensures the main application container only starts **after** MongoDB is accepting connections
+- **Added** HTTP `readinessProbe` and `livenessProbe` on each service's `/health` endpoint
+  - Kubernetes now properly tracks pod health and only routes traffic to ready pods
+
+#### C. Service Source Code (`services/medimesh-*/server.js`)
+
+- **Replaced** `process.exit(1)` on first MongoDB connection failure with **retry logic**
+- 5 retries with exponential backoff: 3s → 6s → 12s → 24s → 48s
+- Only calls `process.exit(1)` after all retries are exhausted
+- This makes services resilient to brief MongoDB unavailability during rolling updates
+
+### Re-Deployment Instructions
+
+> **Important:** Because the old MongoDB data was initialized with authentication, you must delete the PVC to clear stale data.
+
+```bash
+# 1. Clean up old resources
+kubectl delete statefulset medimesh-mongodb -n medimesh
+kubectl delete pvc medimesh-mongodb-pvc -n medimesh
+kubectl delete deployments --all -n medimesh
+
+# 2. Re-deploy MongoDB (now without auth)
+kubectl apply -f k8s/mongodb/mongodb-pv-pvc.yaml
+kubectl apply -f k8s/mongodb/mongodb-statefulset.yaml
+
+# 3. Wait for MongoDB to be ready
+kubectl wait --for=condition=ready pod/medimesh-mongodb-0 -n medimesh --timeout=120s
+
+# 4. Re-deploy all backend services
+kubectl apply -f k8s/backend-services/
+kubectl apply -f k8s/services/cluster-ip-services.yaml
+
+# 5. Verify — all pods should reach Running with 0 restarts
+kubectl get pods -n medimesh -w
+```
+
+**Expected Result:** All 21 pods (1 MongoDB + 20 service replicas) reach `Running 1/1` with **0 restarts**.
+
+---
+
 ## 🧹 Cleanup
 
 Remove all MediMesh resources:
@@ -416,6 +490,9 @@ kubectl delete pv medimesh-mongodb-pv
 | External Access      | NodePort 30080 for frontend             |
 | Internal Networking  | ClusterIP services with DNS discovery   |
 | Resource Management  | CPU/Memory requests and limits on all   |
+| Startup Ordering     | initContainers wait for MongoDB (busybox nc) |
+| Health Probes        | Liveness + readiness probes on all pods |
+| Retry Logic          | Exponential backoff in all server.js (5 retries) |
 
 ---
 

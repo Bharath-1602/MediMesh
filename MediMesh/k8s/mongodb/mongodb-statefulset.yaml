@@ -31,17 +31,17 @@ spec:
           ports:
             - containerPort: 27017
               name: mongo
-          env:
-            - name: MONGO_INITDB_ROOT_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: medimesh-secrets
-                  key: MONGO_INITDB_ROOT_USERNAME
-            - name: MONGO_INITDB_ROOT_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: medimesh-secrets
-                  key: MONGO_INITDB_ROOT_PASSWORD
+          # No auth env vars — services connect without credentials
+          readinessProbe:
+            tcpSocket:
+              port: 27017
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 27017
+            initialDelaySeconds: 15
+            periodSeconds: 20
           volumeMounts:
             - name: mongodb-data
               mountPath: /data/db

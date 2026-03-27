@@ -28,7 +28,7 @@ spec:
     spec:
       containers:
         - name: medimesh-bff
-          image: bharath44623/medimesh_medimesh-bff:latest
+          image: bharath44623/medimesh_medimesh-bff:v1.1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 5010
@@ -49,6 +49,21 @@ spec:
           envFrom:
             - configMapRef:
                 name: medimesh-config
+          # ─── Health Probes ──────────────────────────────────
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5010
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5010
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
           resources:
             requests:
               cpu: "100m"
