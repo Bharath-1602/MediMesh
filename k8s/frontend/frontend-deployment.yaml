@@ -93,7 +93,7 @@ spec:
           emptyDir: {}
 
 ---
-# ─── NodePort Service (External Access on port 30080) ─────
+# ─── ClusterIP Service (Internal — routed via kGateway) ────
 apiVersion: v1
 kind: Service
 metadata:
@@ -103,13 +103,13 @@ metadata:
     app: medimesh-frontend
     tier: frontend
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: medimesh-frontend
     tier: frontend
   ports:
     - port: 80
       targetPort: 80
-      nodePort: 30080
       protocol: TCP
       name: http
+

@@ -1,6 +1,6 @@
 # 🏥 MediMesh — Kubernetes Deployment Guide
 
-Production-ready Kubernetes configuration for the MediMesh Hospital Management System microservices architecture.
+Production-ready Kubernetes configuration for the MediMesh Hospital Management System microservices architecture, with **kGateway** (Gateway API routing) and **HAProxy** (external load balancer).
 
 ---
 
@@ -16,7 +16,7 @@ k8s/
 │   ├── mongodb-pv-pvc.yaml                 # PersistentVolume + PVC (5Gi)
 │   └── mongodb-statefulset.yaml            # StatefulSet + Headless Service
 ├── frontend/
-│   └── frontend-deployment.yaml            # Deployment + NodePort Service
+│   └── frontend-deployment.yaml            # Deployment + ClusterIP Service
 ├── backend-services/
 │   ├── auth-deployment.yaml                # Auth Service (port 5001)
 │   ├── user-deployment.yaml                # User Service (port 5002)
@@ -30,6 +30,11 @@ k8s/
 │   └── bff-deployment.yaml                 # BFF Gateway (port 5010)
 ├── services/
 │   └── cluster-ip-services.yaml            # All 10 ClusterIP services
+├── gateway/
+│   └── kgateway.yaml                       # Gateway + HTTPRoute (all routes)
+├── haproxy/
+│   ├── haproxy.cfg                         # HAProxy config (LB instance)
+│   └── haproxy-setup.sh                    # Automated HAProxy setup script
 └── hpa/
     └── frontend-hpa.yaml                   # HPA for frontend (2→5 pods)
 ```
@@ -39,33 +44,37 @@ k8s/
 ## 🏗️ Architecture Overview
 
 ```
-                        ┌─────────────────────────┐
-                        │   AWS EC2 K8s Cluster    │
-                        │  (1 Master + 2 Workers)  │
-                        └─────────────────────────┘
-                                    │
-                        ┌───────────▼───────────┐
-                        │   NodePort :30080      │
-                        │   medimesh-frontend    │  ← 2-5 replicas (HPA)
-                        └───────────┬───────────┘
-                                    │
-                        ┌───────────▼───────────┐
-                        │   ClusterIP :5010      │
-                        │   medimesh-bff         │  ← 2 replicas
-                        └───────────┬───────────┘
-                                    │
-          ┌────────┬────────┬───────┼────────┬────────┬────────┐
-          ▼        ▼        ▼       ▼        ▼        ▼        ▼
-       :5001    :5002    :5003   :5004    :5005    :5006    :5007-5009
-       auth     user     doctor  appt     vitals   pharmacy  ambulance/
-                                                             complaint/
-                                                             forum
-          └────────┴────────┴───────┼────────┴────────┴────────┘
-                                    │
-                        ┌───────────▼───────────┐
-                        │   MongoDB StatefulSet  │
-                        │   ClusterIP :27017     │  ← Persistent (5Gi PV)
-                        └───────────────────────┘
+                  Internet (Port 80)
+                        │
+              ┌─────────▼──────────┐
+              │  HAProxy (LB EC2)  │  ← Separate EC2 instance
+              │  bind *:80         │     Round-robin to workers
+              └─────────┬──────────┘
+                        │
+              ┌─────────▼──────────────────────┐
+              │  kGateway (Envoy Proxy)        │  ← Gateway API routing
+              │  HTTPRoute path-based routing  │     NodePort on workers
+              └─────────┬──────────────────────┘
+                        │
+    ┌───────────────────┼───────────────────────────┐
+    │ Path-based routes:                            │
+    │  /             → medimesh-frontend-svc:80     │
+    │  /api          → medimesh-bff-svc:5010        │
+    │  /auth         → medimesh-auth-svc:5001       │
+    │  /user         → medimesh-user-svc:5002       │
+    │  /doctor       → medimesh-doctor-svc:5003     │
+    │  /appointment  → medimesh-appointment-svc:5004│
+    │  /vitals       → medimesh-vitals-svc:5005     │
+    │  /pharmacy     → medimesh-pharmacy-svc:5006   │
+    │  /ambulance    → medimesh-ambulance-svc:5007  │
+    │  /complaint    → medimesh-complaint-svc:5008  │
+    │  /forum        → medimesh-forum-svc:5009      │
+    └───────────────────┼───────────────────────────┘
+                        │
+              ┌─────────▼──────────┐
+              │  MongoDB StatefulSet│  ← Persistent (5Gi PV)
+              │  ClusterIP :27017  │
+              └────────────────────┘
 ```
 
 ---
@@ -143,6 +152,40 @@ kubectl apply -f k8s/frontend/frontend-deployment.yaml
 kubectl apply -f k8s/hpa/frontend-hpa.yaml
 ```
 
+### Step 7: Install kGateway & Apply Gateway Routes
+
+```bash
+# Install Gateway API CRDs
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
+
+# Install kGateway controller (requires Helm)
+helm install kgateway oci://cr.kgateway.dev/kgateway-helm/kgateway \
+  --version v2.0.0-main \
+  -n kgateway-system --create-namespace
+
+# Wait for kGateway controller to be ready
+kubectl get pods -n kgateway-system --watch
+
+# Apply Gateway + HTTPRoutes
+kubectl apply -f k8s/gateway/kgateway.yaml
+
+# Get the kGateway NodePort (note the port number)
+kubectl get svc -n medimesh
+```
+
+### Step 8: Set Up HAProxy (Separate EC2 Instance)
+
+On your **HAProxy EC2 instance** (separate from the K8s cluster):
+
+```bash
+# Copy the setup script to HAProxy instance and run:
+chmod +x haproxy-setup.sh
+sudo ./haproxy-setup.sh <KGATEWAY_NODEPORT>
+
+# Example (if kGateway NodePort is 31080):
+sudo ./haproxy-setup.sh 31080
+```
+
 ### 🎯 One-Shot Deployment (All at Once)
 
 If you want to deploy everything in a single command:
@@ -156,6 +199,7 @@ kubectl apply -f k8s/services/
 kubectl apply -f k8s/backend-services/
 kubectl apply -f k8s/frontend/
 kubectl apply -f k8s/hpa/
+kubectl apply -f k8s/gateway/kgateway.yaml
 ```
 
 ---
@@ -186,7 +230,7 @@ kubectl get svc -n medimesh
 
 | Service Name               | Type      | Port  |
 |----------------------------|-----------|-------|
-| medimesh-frontend-svc      | NodePort  | 80:30080 |
+| medimesh-frontend-svc      | ClusterIP | 80    |
 | medimesh-bff-svc           | ClusterIP | 5010  |
 | medimesh-auth-svc          | ClusterIP | 5001  |
 | medimesh-user-svc          | ClusterIP | 5002  |
@@ -198,6 +242,7 @@ kubectl get svc -n medimesh
 | medimesh-complaint-svc     | ClusterIP | 5008  |
 | medimesh-forum-svc         | ClusterIP | 5009  |
 | medimesh-mongodb           | ClusterIP (None) | 27017 |
+| medimesh-gateway           | NodePort  | 80:auto |
 
 ### Check HPA
 
@@ -238,22 +283,39 @@ kubectl logs -n medimesh -l app=medimesh-bff -f
 
 ## 🌐 Accessing the Application
 
-### Via NodePort
+### Via HAProxy (Production)
 
-The frontend is exposed on **NodePort 30080**. Access it using any worker node's public IP:
+All traffic goes through HAProxy → kGateway → Services:
 
 ```
-http://<WORKER_NODE_PUBLIC_IP>:30080
+http://<HAPROXY_PUBLIC_IP>
 ```
 
-To find worker node IPs:
-```bash
-kubectl get nodes -o wide
+### HAProxy Stats Dashboard
+
+```
+http://<HAPROXY_PUBLIC_IP>:8404/stats
+Username: admin
+Password: medimesh2026
 ```
 
-Then use the **EXTERNAL-IP** or **INTERNAL-IP** (public IP of EC2 instance) with port `30080`.
+### Route Map
 
-> **AWS Security Group:** Ensure port `30080` is open in your EC2 Security Group for inbound TCP traffic.
+| URL Path | Routed To |
+|----------|----------|
+| `/` | Frontend UI |
+| `/api/*` | BFF Gateway → Backend Services |
+| `/auth/*` | Auth Service (5001) |
+| `/user/*` | User Service (5002) |
+| `/doctor/*` | Doctor Service (5003) |
+| `/appointment/*` | Appointment Service (5004) |
+| `/vitals/*` | Vitals Service (5005) |
+| `/pharmacy/*` | Pharmacy Service (5006) |
+| `/ambulance/*` | Ambulance Service (5007) |
+| `/complaint/*` | Complaint Service (5008) |
+| `/forum/*` | Forum Service (5009) |
+
+> **AWS Security Group (HAProxy Instance):** Ensure port `80` and `8404` are open for inbound TCP traffic.
 
 ---
 
@@ -487,11 +549,13 @@ kubectl delete pv medimesh-mongodb-pv
 | Data Persistence     | MongoDB StatefulSet + 5Gi PV/PVC       |
 | Rolling Updates      | maxUnavailable: 1, maxSurge: 1         |
 | Secure Config        | Secrets (base64) + ConfigMaps           |
-| External Access      | NodePort 30080 for frontend             |
+| Load Balancer        | HAProxy on separate EC2 (port 80)       |
+| API Gateway          | kGateway with HTTPRoute (11 routes)     |
 | Internal Networking  | ClusterIP services with DNS discovery   |
 | Resource Management  | CPU/Memory requests and limits on all   |
 | Startup Ordering     | initContainers wait for MongoDB (busybox nc) |
 | Health Probes        | Liveness + readiness probes on all pods |
+| Sidecar Containers   | Nginx log aggregator on frontend pods   |
 | Retry Logic          | Exponential backoff in all server.js (5 retries) |
 
 ---
