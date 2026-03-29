@@ -93,7 +93,8 @@ frontend http_front
 # ─── kGateway Backend ─────────────────────────────────────
 backend kgateway_backend
     balance roundrobin
-    option httpchk GET /
+    option httpchk
+    http-check send meth GET uri / ver HTTP/1.1 hdr Host localhost
     http-check expect status 200
 
     server worker1 172.31.94.132:${NODEPORT} check inter 5s fall 3 rise 2

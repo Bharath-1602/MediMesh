@@ -1,5 +1,5 @@
 # ════════════════════════════════════════════════════════════
-# MediMesh — Frontend Deployment + NodePort Service
+# MediMesh — Frontend Deployment + ClusterIP Service
 # ════════════════════════════════════════════════════════════
 
 # ─── Deployment ───────────────────────────────────────────
