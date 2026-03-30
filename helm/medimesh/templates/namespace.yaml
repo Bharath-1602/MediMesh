@@ -1,11 +1,9 @@
 # ════════════════════════════════════════════════════════════
 # MediMesh — Kubernetes Namespace
 # ════════════════════════════════════════════════════════════
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{ .Values.namespace.name }}
-  labels:
-    app: {{ .Values.namespace.labels.app }}
-    project: {{ .Values.namespace.labels.project }}
-    environment: {{ .Values.namespace.labels.environment }}
+# Namespace is created automatically by:
+#   helm install ... --create-namespace
+#
+# This template is intentionally left empty to avoid
+# "namespace already exists" conflicts.
+# ════════════════════════════════════════════════════════════
