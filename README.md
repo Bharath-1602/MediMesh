@@ -35,8 +35,14 @@
       └───────────────────────┼───────────────────────────┘
                               │
                     ┌─────────▼──────────┐
-                    │  MongoDB StatefulSet│  ← Persistent (5Gi PV)
+                    │  MongoDB StatefulSet│  ← Persistent (5Gi NFS PVC)
                     │  ClusterIP :27017  │
+                    └─────────┬──────────┘
+                              │ NFS mount
+                    ┌─────────▼──────────┐
+                    │  NFS Server (on    │  ← HAProxy/NFS EC2 instance
+                    │  HAProxy EC2)      │     /srv/nfs/medimesh
+                    │  Port 2049         │     Dynamic provisioning
                     └────────────────────┘
 ```
 
@@ -62,9 +68,18 @@ MediMesh/
 │   ├── namespace.yaml           # Dedicated namespace
 │   ├── configmap.yaml           # Non-sensitive configuration
 │   ├── secret.yaml              # Sensitive credentials (base64)
+│   ├── nfs/                     # ★ NFS Dynamic Provisioning
+│   │   ├── nfs-server-setup.sh  # NFS server install script (HAProxy EC2)
+│   │   ├── nfs-client-setup.sh  # NFS client install (all K8s nodes)
+│   │   ├── rbac.yaml            # ServiceAccount + RBAC for provisioner
+│   │   ├── storageclass.yaml    # nfs-dynamic StorageClass
+│   │   ├── nfs-provisioner-deployment.yaml  # NFS provisioner pod
+│   │   └── README.md            # NFS setup documentation
 │   ├── mongodb/
-│   │   ├── mongodb-pv-pvc.yaml  # PersistentVolume + PVC (5Gi)
-│   │   └── mongodb-statefulset.yaml  # StatefulSet + Headless Service
+│   │   ├── mongodb-statefulset.yaml  # 3-replica StatefulSet + Headless Service
+│   │   ├── mongodb-rs-init-job.yaml  # ★ Job to init ReplicaSet (rs.initiate)
+│   │   ├── mongodb-pv-pvc.yaml       # Reference (PVCs auto-created)
+│   │   └── README.md                 # MongoDB ReplicaSet documentation
 │   ├── backend-services/        # 10 Deployment manifests (9 services + BFF)
 │   ├── services/
 │   │   └── cluster-ip-services.yaml  # All 10 ClusterIP services
@@ -80,6 +95,7 @@ MediMesh/
 │   ├── hpa/
 │   │   └── frontend-hpa.yaml   # HPA for frontend (2→5 pods)
 │   └── README.md               # Full K8s deployment guide
+├── .gitignore
 ├── docker-compose.yml
 ├── build-push.sh
 └── README.md                   # This file
@@ -176,19 +192,68 @@ kubectl apply -f k8s/configmap.yaml
 kubectl apply -f k8s/secret.yaml
 ```
 
-### Step 3: Deploy MongoDB
+### Step 3: Set Up NFS Dynamic Provisioning
 
+> See [k8s/nfs/README.md](k8s/nfs/README.md) for detailed NFS documentation.
+
+**3a. Set up NFS server on HAProxy EC2 instance:**
 ```bash
-kubectl apply -f k8s/mongodb/mongodb-pv-pvc.yaml
+# On the HAProxy/NFS EC2 instance
+scp -i <your-key.pem> k8s/nfs/nfs-server-setup.sh ubuntu@<HAPROXY_IP>:~/
+ssh -i <your-key.pem> ubuntu@<HAPROXY_IP>
+chmod +x nfs-server-setup.sh
+sudo ./nfs-server-setup.sh 172.31.0.0/16    # Use your VPC CIDR
+```
+
+**3b. Install NFS client on ALL K8s nodes (master + workers):**
+```bash
+# On EACH K8s node
+sudo apt-get install -y nfs-common
+```
+
+**3c. Deploy NFS provisioner on K8s (from master):**
+```bash
+# ⚠️  First edit nfs-provisioner-deployment.yaml:
+#    Replace <NFS_SERVER_PRIVATE_IP> with HAProxy/NFS private IP
+kubectl apply -f k8s/nfs/rbac.yaml
+kubectl apply -f k8s/nfs/storageclass.yaml
+kubectl apply -f k8s/nfs/nfs-provisioner-deployment.yaml
+
+# Verify provisioner is running
+kubectl get pods -n medimesh -l app=nfs-client-provisioner
+```
+
+### Step 4: Deploy MongoDB ReplicaSet
+
+> See [k8s/mongodb/README.md](k8s/mongodb/README.md) for detailed MongoDB ReplicaSet documentation.
+
+**4a. Deploy the StatefulSet (creates 3 pods + 3 NFS PVCs):**
+```bash
 kubectl apply -f k8s/mongodb/mongodb-statefulset.yaml
 ```
 
-Wait for MongoDB to be ready:
+**4b. Wait for ALL 3 MongoDB pods to be Running:**
 ```bash
-kubectl wait --for=condition=ready pod/medimesh-mongodb-0 -n medimesh --timeout=120s
+kubectl get pods -n medimesh -l app=medimesh-mongodb -w
+# Wait until all 3 show Running 1/1, then Ctrl+C
 ```
 
-### Step 4: Deploy Backend Services
+**4c. Initialize the ReplicaSet (run rs.initiate):**
+```bash
+kubectl apply -f k8s/mongodb/mongodb-rs-init-job.yaml
+```
+
+**4d. Verify ReplicaSet initialization:**
+```bash
+# Watch the init Job logs
+kubectl logs -n medimesh job/mongodb-rs-init -f
+
+# Verify: should show 1 PRIMARY + 2 SECONDARY
+kubectl exec -n medimesh medimesh-mongodb-0 -- \
+  mongosh --quiet --eval "rs.status().members.forEach(m => print(m.name + ' → ' + m.stateStr))"
+```
+
+### Step 5: Deploy Backend Services
 
 ```bash
 kubectl apply -f k8s/backend-services/
@@ -201,13 +266,13 @@ kubectl get pods -n medimesh -l tier=backend --watch
 # Wait until all show Running 1/1, then Ctrl+C
 ```
 
-### Step 5: Deploy Frontend
+### Step 6: Deploy Frontend
 
 ```bash
 kubectl apply -f k8s/frontend/frontend-deployment.yaml
 ```
 
-### Step 6: Apply HPA (Optional — requires metrics-server)
+### Step 7: Apply HPA (Optional — requires metrics-server)
 
 ```bash
 kubectl apply -f k8s/hpa/frontend-hpa.yaml
@@ -215,7 +280,7 @@ kubectl apply -f k8s/hpa/frontend-hpa.yaml
 
 ---
 
-### 🌐 Step 7: Install kGateway (Gateway API)
+### 🌐 Step 8: Install kGateway (Gateway API)
 
 > kGateway is a Kubernetes-native API Gateway based on Envoy Proxy. It replaces the older Ingress approach with the modern **Gateway API** standard.
 
@@ -292,7 +357,7 @@ medimesh-gateway   NodePort   10.96.x.x   <none>   80:31080/TCP   2m
 
 ---
 
-### 🔀 Step 8: Set Up HAProxy (Separate EC2 Instance)
+### 🔀 Step 9: Set Up HAProxy (Separate EC2 Instance)
 
 > HAProxy runs on a **separate EC2 instance** (not on the K8s cluster). It accepts public traffic on port 80 and load-balances to the kGateway NodePort on both worker nodes.
 
@@ -353,7 +418,7 @@ http://<HAPROXY_PUBLIC_IP>:8404/stats → HAProxy dashboard (admin / medimesh202
 ### ✅ Final Verification
 
 ```bash
-# All pods running (22 total: 1 MongoDB + 20 service replicas + 1 Envoy proxy)
+# All pods running (24 total: 3 MongoDB + 20 service replicas + 1 Envoy proxy)
 kubectl get pods -n medimesh -o wide
 
 # All services (11 ClusterIP + 1 NodePort gateway)
@@ -435,11 +500,16 @@ Dashboard        → medimesh-bff → aggregates multiple services
 |---------|-----------|
 | **Namespace** | `medimesh` namespace isolates all resources |
 | **Deployments** | All 10 app services + frontend (2 replicas each) |
-| **StatefulSet** | MongoDB with stable network identity |
+| **StatefulSet** | MongoDB 3-replica ReplicaSet with stable pod identities |
+| **MongoDB ReplicaSet** | 3-node rs0: auto-failover, data replication via oplog |
+| **ReplicaSet Init Job** | Kubernetes Job runs rs.initiate() to form the ReplicaSet |
 | **ConfigMap** | Service URLs, MongoDB host config |
 | **Secret** | JWT secret, admin credentials (base64) |
-| **PersistentVolume** | 5Gi hostPath for MongoDB data |
-| **PersistentVolumeClaim** | Bound to PV for MongoDB pod |
+| **NFS Server** | External NFS on HAProxy EC2 instance |
+| **NFS Provisioner** | nfs-subdir-external-provisioner for dynamic PVs |
+| **StorageClass** | `nfs-dynamic` — auto-provisions NFS-backed PVs |
+| **PersistentVolumeClaim** | Dynamic PVC bound via NFS StorageClass |
+| **RBAC** | ServiceAccount + ClusterRole for NFS provisioner |
 | **ClusterIP Service** | Internal communication between all 11 services |
 | **Gateway API (Gateway)** | kGateway creates Envoy proxy, listens on port 80 |
 | **Gateway API (HTTPRoute)** | 11 path-based routing rules to microservices |
@@ -479,9 +549,10 @@ All images are hosted on Docker Hub under `bharath44623`:
 
 | Feature              | Implementation                          |
 |----------------------|-----------------------------------------|
-| High Availability    | 2 replicas per service (22 total pods)  |
+| High Availability    | 2 replicas per service + 3 MongoDB (24 total pods) |
+| MongoDB ReplicaSet   | 3-node rs0 with auto-failover and data replication |
 | Auto-Scaling         | HPA on frontend (2→5 pods, 60% CPU)    |
-| Data Persistence     | MongoDB StatefulSet + 5Gi PV/PVC       |
+| Data Persistence     | MongoDB StatefulSet + NFS dynamic PVC  |
 | Rolling Updates      | maxUnavailable: 1, maxSurge: 1         |
 | Secure Config        | Secrets (base64) + ConfigMaps           |
 | External Load Balancer | HAProxy on separate EC2 (port 80)     |
