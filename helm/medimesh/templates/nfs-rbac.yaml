@@ -1,9 +1,4 @@
-# ════════════════════════════════════════════════════════════
-# MediMesh — NFS Provisioner RBAC
-# ════════════════════════════════════════════════════════════
-# ServiceAccount, ClusterRole, ClusterRoleBinding, Role,
-# and RoleBinding for the NFS subdir external provisioner.
-# ════════════════════════════════════════════════════════════
+
 {{- if .Values.nfs.enabled }}
 
 # ─── ServiceAccount ───────────────────────────────────────
