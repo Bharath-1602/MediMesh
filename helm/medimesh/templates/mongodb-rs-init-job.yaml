@@ -1,15 +1,4 @@
-# ════════════════════════════════════════════════════════════
-# MediMesh — MongoDB ReplicaSet Initialization Job
-# ════════════════════════════════════════════════════════════
-# This Job connects to medimesh-mongodb-0 and initializes the
-# 3-member ReplicaSet with rs.initiate(). It:
-#
-#   1. Waits for all 3 MongoDB pods to be reachable
-#   2. Checks if ReplicaSet is already initialized (idempotent)
-#   3. Runs rs.initiate() with all 3 members
-#   4. Waits for PRIMARY election to complete
-#   5. Prints final rs.status() for verification
-# ════════════════════════════════════════════════════════════
+
 apiVersion: batch/v1
 kind: Job
 metadata:
