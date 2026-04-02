@@ -1,12 +1,5 @@
-# ════════════════════════════════════════════════════════════
-# MediMesh — Helm Chart Values
-# ════════════════════════════════════════════════════════════
-# Override these values for different environments.
-# Uses 'medimesh-helm' namespace to avoid conflicts with
-# the existing manually-deployed 'medimesh' namespace.
-# ════════════════════════════════════════════════════════════
 
-# ─── Global Settings ───────────────────────────────────────
+
 global:
   namespace: medimesh-helm
   environment: production
