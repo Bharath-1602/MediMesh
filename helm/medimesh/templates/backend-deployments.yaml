@@ -1,9 +1,4 @@
-# ════════════════════════════════════════════════════════════
-# MediMesh — Backend Microservice Deployments
-# ════════════════════════════════════════════════════════════
-# Generates a Deployment for each backend service defined
-# in .Values.backendServices using a range loop.
-# ════════════════════════════════════════════════════════════
+
 {{- range $key, $svc := .Values.backendServices }}
 ---
 apiVersion: apps/v1
