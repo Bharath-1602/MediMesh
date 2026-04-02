@@ -1,15 +1,4 @@
-# ════════════════════════════════════════════════════════════
-# MediMesh — MongoDB 3-Node ReplicaSet StatefulSet
-# ════════════════════════════════════════════════════════════
-# Deploys a 3-member MongoDB ReplicaSet for high availability
-# and automatic data replication across pods.
-#
-# Each pod gets its own NFS-backed PVC via volumeClaimTemplates.
-# The NFS provisioner (nfs-dynamic StorageClass) auto-creates
-# PVs — no hostPath, no nodeAffinity, no taints needed.
-# ════════════════════════════════════════════════════════════
 
-# ─── Headless Service (required for StatefulSet DNS) ──────
 apiVersion: v1
 kind: Service
 metadata:
