@@ -1,9 +1,4 @@
-# ════════════════════════════════════════════════════════════
-# MediMesh — kGateway (Gateway + HTTPRoute)
-# ════════════════════════════════════════════════════════════
-# Gateway API-based routing for all MediMesh microservices.
-# kGateway controller must be installed before applying this.
-# ════════════════════════════════════════════════════════════
+
 {{- if .Values.gateway.enabled }}
 
 # ─── Gateway ─────────────────────────────────────────────
