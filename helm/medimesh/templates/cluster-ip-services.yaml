@@ -1,11 +1,3 @@
-# ════════════════════════════════════════════════════════════
-# MediMesh — All ClusterIP Services (Internal Communication)
-# ════════════════════════════════════════════════════════════
-# These services enable internal DNS-based communication
-# between microservices within the medimesh namespace.
-# Frontend service is in frontend-deployment.yaml
-# MongoDB headless service is in mongodb-statefulset.yaml
-# ════════════════════════════════════════════════════════════
 
 {{- range $key, $svc := .Values.backendServices }}
 ---
